@@ -39,7 +39,7 @@ class SyncEventsUsecase:
             raise SyncAlreadyRunning
 
         changed_at = (
-            meta.last_changed_at.isoformat()
+            meta.last_changed_at.date().isoformat()
             if meta.last_changed_at is not None
             else FIRST_SYNC_CHANGED_AT
         )

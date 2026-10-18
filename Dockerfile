@@ -10,9 +10,9 @@ WORKDIR /app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
-    && curl -LsSf https://astral.sh/uv/install.sh | sh
+    && curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
 
-ENV PATH="/root/.local/bin:${PATH}"
+ENV PATH="/usr/local/bin:${PATH}"
 
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev

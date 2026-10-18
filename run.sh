@@ -5,7 +5,7 @@ PORT="${PORT:-8000}"
 
 echo "Running database migrations..."
 for attempt in $(seq 1 30); do
-  if uv run alembic upgrade head; then
+  if uv run --no-sync alembic upgrade head; then
     echo "Migrations applied successfully"
     break
   fi
@@ -18,4 +18,4 @@ for attempt in $(seq 1 30); do
 done
 
 echo "Starting uvicorn on 0.0.0.0:${PORT}"
-exec uv run uvicorn main:app --host 0.0.0.0 --port "${PORT}"
+exec uv run --no-sync uvicorn main:app --host 0.0.0.0 --port "${PORT}"

@@ -1,6 +1,7 @@
 from uuid import UUID
 
-from app.domain.exceptions import EventNotFound
+from app.domain.entities import EventStatus
+from app.domain.exceptions import EventNotFound, EventUnexpectedStatus
 from app.usecases.protocols import (
     EventRepositoryProtocol,
     EventsProviderClientProtocol,
@@ -23,6 +24,12 @@ class GetSeatsUsecase:
         event = await self._events.get(event_id)
         if event is None:
             raise EventNotFound
+
+        # Provider returns 500 HTML for non-published events — validate locally.
+        if event.status != EventStatus.published:
+            raise EventUnexpectedStatus(
+                f"Event status must be published, got {event.status}"
+            )
 
         cached = self._cache.get(event_id)
         if cached is not None:

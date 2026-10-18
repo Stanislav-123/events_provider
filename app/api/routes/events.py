@@ -13,6 +13,7 @@ from app.api.deps import (
     get_session,
 )
 from app.api.pagination import build_page_link
+from app.api.provider_errors import http_exception_from_provider
 from app.api.schemas.events import (
     EventDetailSchema,
     EventListItemSchema,
@@ -23,14 +24,24 @@ from app.api.schemas.events import (
 )
 from app.cache.seats_cache import SeatsCache
 from app.clients.events_provider import EventsProviderClient
-from app.domain.exceptions import EventNotFound, ProviderError
+from app.domain.exceptions import EventNotFound, EventUnexpectedStatus, ProviderError
 from app.usecases.get_event import GetEventUsecase
 from app.usecases.get_seats import GetSeatsUsecase
 
 router = APIRouter(tags=["events"])
 
 
-@router.get("/api/events/", response_model=EventsListResponse, name="list_events")
+@router.get(
+    "/api/events/",
+    response_model=EventsListResponse,
+    name="list_events",
+    include_in_schema=True,
+)
+@router.get(
+    "/api/events",
+    response_model=EventsListResponse,
+    include_in_schema=False,
+)
 async def list_events(
     request: Request,
     date_from: date | None = Query(default=None),
@@ -89,7 +100,16 @@ async def list_events(
     )
 
 
-@router.get("/api/events/{event_id}/", response_model=EventDetailSchema)
+@router.get(
+    "/api/events/{event_id}/",
+    response_model=EventDetailSchema,
+    include_in_schema=True,
+)
+@router.get(
+    "/api/events/{event_id}",
+    response_model=EventDetailSchema,
+    include_in_schema=False,
+)
 async def get_event(
     event_id: UUID,
     session: AsyncSession = Depends(get_session),
@@ -120,7 +140,16 @@ async def get_event(
     )
 
 
-@router.get("/api/events/{event_id}/seats/", response_model=SeatsResponse)
+@router.get(
+    "/api/events/{event_id}/seats/",
+    response_model=SeatsResponse,
+    include_in_schema=True,
+)
+@router.get(
+    "/api/events/{event_id}/seats",
+    response_model=SeatsResponse,
+    include_in_schema=False,
+)
 async def get_event_seats(
     event_id: UUID,
     session: AsyncSession = Depends(get_session),
@@ -135,10 +164,12 @@ async def get_event_seats(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Event not found",
         ) from exc
-    except ProviderError as exc:
+    except EventUnexpectedStatus as exc:
         raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
+            status_code=status.HTTP_409_CONFLICT,
             detail=str(exc),
         ) from exc
+    except ProviderError as exc:
+        raise http_exception_from_provider(exc) from exc
 
     return SeatsResponse(event_id=event_id, available_seats=seats)

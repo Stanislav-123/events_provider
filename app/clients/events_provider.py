@@ -1,4 +1,5 @@
 from typing import Any
+from urllib.parse import urlparse, urlunparse
 from uuid import UUID
 
 import httpx
@@ -41,14 +42,37 @@ class EventsProviderClient:
             raise RuntimeError("EventsProviderClient is not started")
         return self._client
 
+    def _rewrite_provider_url(self, url: str) -> str:
+        """Keep path/query from provider pagination links, but use configured host.
+
+        Inside the cluster `next` links may point to the public hostname which is
+        unreachable; rewrite them to EVENTS_PROVIDER_URL.
+        """
+        parsed = urlparse(url)
+        base = urlparse(self._base_url)
+        return urlunparse(
+            (
+                base.scheme or parsed.scheme,
+                base.netloc or parsed.netloc,
+                parsed.path,
+                parsed.params,
+                parsed.query,
+                parsed.fragment,
+            )
+        )
+
     async def get_events(
         self,
         changed_at: str,
         cursor_url: str | None = None,
     ) -> dict[str, Any]:
         """Fetch one page of events from the provider."""
-        url = cursor_url or f"{self._base_url}/api/events/"
-        params = None if cursor_url else {"changed_at": changed_at}
+        if cursor_url:
+            url = self._rewrite_provider_url(cursor_url)
+            params = None
+        else:
+            url = f"{self._base_url}/api/events/"
+            params = {"changed_at": changed_at}
 
         response = await self._http().get(
             url,
@@ -70,10 +94,12 @@ class EventsProviderClient:
         if isinstance(payload, list):
             return [str(seat) for seat in payload]
 
-        seats = payload.get("available_seats")
-        if seats is None:
-            raise ProviderError("Unexpected seats response from provider")
-        return [str(seat) for seat in seats]
+        for key in ("available_seats", "seats", "results"):
+            seats = payload.get(key)
+            if seats is not None:
+                return [str(seat) for seat in seats]
+
+        raise ProviderError("Unexpected seats response from provider")
 
     async def register(
         self,
@@ -97,6 +123,9 @@ class EventsProviderClient:
         self._raise_for_status(response)
         payload = response.json()
 
+        if isinstance(payload, str):
+            return payload
+
         ticket_id = payload.get("ticket_id") or payload.get("id")
         if not ticket_id:
             raise ProviderError("Provider did not return ticket id")
@@ -112,7 +141,7 @@ class EventsProviderClient:
             "DELETE",
             f"{self._base_url}/api/events/{event_id}/unregister/",
             headers=self._headers,
-            json={"ticket_id": str(ticket_id)},
+            params={"ticket_id": str(ticket_id)},
         )
         self._raise_for_status(response)
 
@@ -120,7 +149,8 @@ class EventsProviderClient:
         try:
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            detail = exc.response.text
+            detail = exc.response.text[:500]
             raise ProviderError(
-                f"Provider request failed with {exc.response.status_code}: {detail}"
+                f"Provider request failed with {exc.response.status_code}: {detail}",
+                status_code=exc.response.status_code,
             ) from exc

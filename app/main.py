@@ -30,12 +30,18 @@ async def lifespan(app: FastAPI):
     app.state.sync_worker = worker
 
     if settings.enable_background_sync:
-        worker.start()
+        try:
+            worker.start()
+        except Exception:
+            logging.exception("Failed to start background sync worker")
     try:
         yield
     finally:
         if settings.enable_background_sync:
-            await worker.stop()
+            try:
+                await worker.stop()
+            except Exception:
+                logging.exception("Failed to stop background sync worker")
         await client.aclose()
 
 

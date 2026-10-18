@@ -9,6 +9,7 @@ from app.api.deps import (
     get_provider_client,
     get_session,
 )
+from app.api.provider_errors import http_exception_from_provider
 from app.api.schemas.tickets import (
     CancelTicketResponse,
     CreateTicketRequest,
@@ -31,6 +32,13 @@ router = APIRouter(tags=["tickets"])
     "/api/tickets/",
     response_model=CreateTicketResponse,
     status_code=status.HTTP_201_CREATED,
+    include_in_schema=True,
+)
+@router.post(
+    "/api/tickets",
+    response_model=CreateTicketResponse,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False,
 )
 async def create_ticket(
     body: CreateTicketRequest,
@@ -57,10 +65,7 @@ async def create_ticket(
             detail=str(exc),
         ) from exc
     except ProviderError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=str(exc),
-        ) from exc
+        raise http_exception_from_provider(exc) from exc
 
     return CreateTicketResponse(ticket_id=ticket_id)
 
@@ -68,6 +73,12 @@ async def create_ticket(
 @router.delete(
     "/api/tickets/{ticket_id}/",
     response_model=CancelTicketResponse,
+    include_in_schema=True,
+)
+@router.delete(
+    "/api/tickets/{ticket_id}",
+    response_model=CancelTicketResponse,
+    include_in_schema=False,
 )
 async def cancel_ticket(
     ticket_id: UUID,
@@ -83,9 +94,6 @@ async def cancel_ticket(
             detail="Ticket not found",
         ) from exc
     except ProviderError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=str(exc),
-        ) from exc
+        raise http_exception_from_provider(exc) from exc
 
     return CancelTicketResponse(success=True)

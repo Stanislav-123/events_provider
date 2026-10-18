@@ -17,6 +17,10 @@ class TicketNotFound(AppError):
 class ProviderError(AppError):
     """Events Provider API returned an error."""
 
+    def __init__(self, message: str, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
 
 class SyncAlreadyRunning(AppError):
     """Another synchronization process is already running."""

@@ -60,6 +60,45 @@ async def test_get_events_follows_cursor_url(client: EventsProviderClient) -> No
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_get_events_rewrites_public_cursor_host(
+    client: EventsProviderClient,
+) -> None:
+    public_cursor = "http://events-provider.dev-2.python-labs.ru/api/events/?cursor=abc"
+    route = respx.get(f"{BASE_URL}/api/events/?cursor=abc").mock(
+        return_value=httpx.Response(
+            200,
+            json={"next": None, "results": [{"id": "3"}]},
+        )
+    )
+
+    payload = await client.get_events(
+        changed_at="2000-01-01",
+        cursor_url=public_cursor,
+    )
+
+    assert payload["results"][0]["id"] == "3"
+    assert route.called
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_unregister_sends_ticket_id_query_param(
+    client: EventsProviderClient,
+) -> None:
+    event_id = uuid4()
+    ticket_id = uuid4()
+    route = respx.delete(
+        f"{BASE_URL}/api/events/{event_id}/unregister/"
+    ).mock(return_value=httpx.Response(200, json={"success": True}))
+
+    await client.unregister(event_id, ticket_id)
+
+    assert route.called
+    assert route.calls.last.request.url.params["ticket_id"] == str(ticket_id)
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_get_seats(client: EventsProviderClient) -> None:
     event_id = uuid4()
     respx.get(f"{BASE_URL}/api/events/{event_id}/seats/").mock(
@@ -93,20 +132,6 @@ async def test_register_returns_ticket_id(client: EventsProviderClient) -> None:
 
     assert result == ticket_id
     assert b"Ivan" in route.calls.last.request.content
-
-
-@respx.mock
-@pytest.mark.asyncio
-async def test_unregister(client: EventsProviderClient) -> None:
-    event_id = uuid4()
-    ticket_id = uuid4()
-    route = respx.delete(
-        f"{BASE_URL}/api/events/{event_id}/unregister/"
-    ).mock(return_value=httpx.Response(200, json={"success": True}))
-
-    await client.unregister(event_id, ticket_id)
-
-    assert route.called
 
 
 @respx.mock

@@ -5,6 +5,7 @@ from uuid import UUID
 
 
 class EventStatus(StrEnum):
+    new = "new"
     draft = "draft"
     published = "published"
     registration_closed = "registration_closed"

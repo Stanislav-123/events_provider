@@ -1,19 +1,19 @@
+
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-
-def _to_asyncpg_url(url: str) -> str:
-    if url.startswith("postgres://"):
-        return "postgresql+asyncpg://" + url.removeprefix("postgres://")
-    if url.startswith("postgresql://"):
-        return "postgresql+asyncpg://" + url.removeprefix("postgresql://")
-    return url
+from sqlalchemy.engine import URL
 
 
 class Settings(BaseSettings):
-    database_url: str = Field(alias="DATABASE_URL")
+    postgres_host: str = Field(alias="POSTGRES_HOST")
+    postgres_port: int = Field(default=5432, alias="POSTGRES_PORT")
+    postgres_username: str = Field(alias="POSTGRES_USERNAME")
+    postgres_password: str = Field(alias="POSTGRES_PASSWORD")
+    postgres_database_name: str = Field(alias="POSTGRES_DATABASE_NAME")
+
     events_provider_url: str = Field(alias="EVENTS_PROVIDER_URL")
     events_provider_api_key: str = Field(alias="EVENTS_PROVIDER_API_KEY")
+
     sync_interval_seconds: int = 86_400
     seats_cache_ttl_seconds: int = 30
     enable_background_sync: bool = True
@@ -26,12 +26,16 @@ class Settings(BaseSettings):
         populate_by_name=True,
     )
 
-    @field_validator("database_url", mode="before")
-    @classmethod
-    def normalize_database_url(cls, value: object) -> object:
-        if isinstance(value, str):
-            return _to_asyncpg_url(value.strip())
-        return value
+    @property
+    def database_url(self) -> str:
+        return URL.create(
+            drivername="postgresql+asyncpg",
+            username=self.postgres_username,
+            password=self.postgres_password,
+            host=self.postgres_host,
+            port=self.postgres_port,
+            database=self.postgres_database_name,
+        ).render_as_string(hide_password=False)
 
     @field_validator("events_provider_url", mode="before")
     @classmethod

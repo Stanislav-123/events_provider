@@ -1,7 +1,9 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 from app.api.routes import build_api_router
 from app.cache.seats_cache import SeatsCache
@@ -48,7 +50,20 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     app = FastAPI(title="Events Aggregator", lifespan=lifespan)
     app.include_router(build_api_router())
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(
+        _request: Request,
+        exc: RequestValidationError,
+    ) -> JSONResponse:
+        # LMS autotests expect HTTP 400 for invalid request bodies (not 422).
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"detail": exc.errors()},
+        )
+
     return app
 
 
 app = create_app()
+

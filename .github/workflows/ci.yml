@@ -1,0 +1,52 @@
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  lint:
+    name: Lint (Ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Run Ruff
+        run: uv run ruff check .
+
+      - name: Run tests
+        run: uv run pytest
+        env:
+          DATABASE_URL: postgresql+asyncpg://events_user:local_dev_password@127.0.0.1:5432/events_db
+          EVENTS_PROVIDER_URL: https://events-provider.test
+          EVENTS_PROVIDER_API_KEY: test-api-key
+          ENABLE_BACKGROUND_SYNC: "false"
+
+  deploy:
+    name: Deploy
+    needs: lint
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t events-aggregator:latest .
+
+      - name: Deploy placeholder
+        run: |
+          echo "Lint and image build passed."
+          echo "Configure platform-specific deploy secrets/commands here."

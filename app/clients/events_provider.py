@@ -121,29 +121,48 @@ class EventsProviderClient:
             },
         )
         self._raise_for_status(response)
-        payload = response.json()
-
-        if isinstance(payload, str):
-            return payload
-
-        ticket_id = payload.get("ticket_id") or payload.get("id")
-        if not ticket_id:
-            raise ProviderError("Provider did not return ticket id")
-        return str(ticket_id)
+        return self._extract_ticket_id(response.json())
 
     async def unregister(
         self,
         event_id: str | UUID,
         ticket_id: str | UUID,
     ) -> None:
-        """Cancel a registration in the provider."""
+        """Cancel a registration in the provider.
+
+        Provider reads ticket_id from the JSON body (request.data), not from
+        query params — query-string form returns HTTP 400.
+        """
         response = await self._http().request(
             "DELETE",
             f"{self._base_url}/api/events/{event_id}/unregister/",
-            headers=self._headers,
-            params={"ticket_id": str(ticket_id)},
+            headers={
+                **self._headers,
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+            json={"ticket_id": str(ticket_id)},
         )
         self._raise_for_status(response)
+
+    def _extract_ticket_id(self, payload: Any) -> str:
+        if isinstance(payload, str):
+            return payload
+
+        if not isinstance(payload, dict):
+            raise ProviderError("Provider did not return ticket id")
+
+        ticket_id = payload.get("ticket_id") or payload.get("id")
+        if ticket_id is None and isinstance(payload.get("ticket"), dict):
+            ticket_id = payload["ticket"].get("id") or payload["ticket"].get(
+                "ticket_id"
+            )
+
+        if not ticket_id:
+            raise ProviderError(
+                f"Provider did not return ticket id: {payload!r}"
+            )
+        return str(ticket_id)
 
     def _raise_for_status(self, response: httpx.Response) -> None:
         try:

@@ -82,7 +82,7 @@ async def test_get_events_rewrites_public_cursor_host(
 
 @respx.mock
 @pytest.mark.asyncio
-async def test_unregister_sends_ticket_id_query_param(
+async def test_unregister_sends_ticket_id_json_body(
     client: EventsProviderClient,
 ) -> None:
     event_id = uuid4()
@@ -94,7 +94,10 @@ async def test_unregister_sends_ticket_id_query_param(
     await client.unregister(event_id, ticket_id)
 
     assert route.called
-    assert route.calls.last.request.url.params["ticket_id"] == str(ticket_id)
+    assert "ticket_id" not in route.calls.last.request.url.params
+    assert route.calls.last.request.content == (
+        f'{{"ticket_id":"{ticket_id}"}}'.encode()
+    )
 
 
 @respx.mock
